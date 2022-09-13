@@ -1,7 +1,6 @@
 import os
 from pathlib import Path
 import struct
-from typing import Literal
 import pyzstd
 import zlib
 import xxhash

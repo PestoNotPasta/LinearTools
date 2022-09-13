@@ -1,29 +1,12 @@
 import os
+from pathlib import Path
 import struct
+from typing import Literal
 import pyzstd
 import zlib
 import xxhash
-
-class Chunk:
-    def __init__(self, raw_chunk, x, z):
-        self.raw_chunk = raw_chunk
-        self.x, self.z = x, z
-
-    def __str__(self):
-        return "Chunk %d %d - %d bytes" % (self.x, self.z, len(self.raw_chunk))
-
-class Region:
-    def __init__(self, chunks, region_x, region_z, mtime, timestamps):
-        self.chunks = chunks
-        self.region_x, self.region_z = region_x, region_z
-        self.mtime = mtime
-        self.timestamps = timestamps
-
-    def chunk_count(self):
-        count = 0
-        for i in self.chunks:
-            count += 1
-        return count
+from objects.chunk import Chunk
+from objects.region import Region
 
 REGION_DIMENSION = 32
 COMPRESSION_TYPE = b'\x02'
@@ -78,32 +61,29 @@ def open_region_linear(file_path):
     iterator = HEADER_SIZE
     for i in range(REGION_DIMENSION * REGION_DIMENSION):
         if sizes[i] > 0:
-            chunks[i] = Chunk(decompressed_region[iterator: iterator + sizes[i]], REGION_DIMENSION * region_x + i % 32, REGION_DIMENSION * region_z + i // 32)
+            chunks[i] = Chunk(decompressed_region[iterator: iterator + sizes[i]], x, z)
         iterator += sizes[i]
 
     return Region(chunks, region_x, region_z, mtime, timestamps)
 
 def quickly_verify_linear(file_path):
     try:
-        raw_region = open(file_path, 'rb').read()
-    except FileNotFoundError: return False
-    mtime = os.path.getmtime(file_path)
-
-    signature, version, newest_timestamp, compression_level, chunk_count, complete_region_length, hash64 = struct.unpack_from(">QBQbhIQ", raw_region, 0)
-
-    if signature != LINEAR_SIGNATURE:
+        with open(file_path, 'rb') as f:
+            raw_region = f.read()
+    except FileNotFoundError: 
         return False
-    if version != LINEAR_VERSION:
+
+    signature = struct.unpack_from(">QBQbhIQ", raw_region, 0)[0]
+    if signature != LINEAR_SIGNATURE or signature != LINEAR_VERSION:
         return False
 
     signature = struct.unpack(">Q", raw_region[-8:])[0]
-
     if signature != LINEAR_SIGNATURE:
         return False
-
+        
     return True
 
-def write_region_linear(destination_filename, region: Region, compression_level=1):
+def write_region_linear(destination_filename: Path, region: Region, compression_level=1):
     inside_header = []
     newest_timestamp = 0
     chunk_count = 0
@@ -136,11 +116,13 @@ def write_region_linear(destination_filename, region: Region, compression_level=
 
     final_region_file = preheader + complete_region_hash + complete_region + footer
 
-    open(destination_filename + ".wip", "wb").write(final_region_file)
+    with open(destination_filename + ".wip", "wb") as f:
+        f.write(final_region_file)
+
     os.utime(destination_filename + ".wip", (region.mtime, region.mtime))
     os.rename(destination_filename + ".wip", destination_filename)
 
-def open_region_anvil(file_path):
+def open_region_anvil(file_path: Path):
     SECTOR = 4096
 
     chunk_starts = []
@@ -148,13 +130,14 @@ def open_region_anvil(file_path):
     timestamps = []
     chunks = []
 
-    file_coords = file_path.split('/')[-1].split('.')[1:3]
-    region_x, region_z = int(file_coords[0]), int(file_coords[1])
+    coords = file_path.name.split('.')[1:3]
+    region_x, region_z = int(coords[0]), int(coords[1])
 
     mtime = os.path.getmtime(file_path)
-    anvil_file = open(file_path, 'rb').read()
+    with open(file_path, 'rb') as f:
+        anvil_file = f.read()
 
-    source_folder = file_path.rpartition("/")[0]
+    source_folder = file_path.parent()
 
     for i in range(REGION_DIMENSION * REGION_DIMENSION):
         a, b, c, sector_count = struct.unpack_from(">BBBB", anvil_file, i * 4)
@@ -164,17 +147,28 @@ def open_region_anvil(file_path):
     for i in range(REGION_DIMENSION * REGION_DIMENSION):
         timestamps.append(struct.unpack_from(">I", anvil_file, SECTOR + i * 4)[0])
 
+    chunk = None
     for i in range(REGION_DIMENSION * REGION_DIMENSION):
         if chunk_starts[i] > 0 and chunk_sizes[i] > 0:
             whole_raw_chunk = anvil_file[SECTOR * chunk_starts[i]:SECTOR * (chunk_starts[i] + chunk_sizes[i])]
             chunk_size, compression_type = struct.unpack_from(">IB", whole_raw_chunk, 0)
-            if compression_type == COMPRESSION_TYPE_ZLIB:
-                chunks.append(Chunk(zlib.decompress(whole_raw_chunk[5:5 + chunk_size]), REGION_DIMENSION * region_x + i % 32, REGION_DIMENSION * region_z + i // 32))
-            elif compression_type == EXTERNAL_FILE_COMPRESSION_TYPE:
-                external_file = open(source_folder + "/c.%d.%d.mcc" % (REGION_DIMENSION * region_x + i % 32, REGION_DIMENSION * region_z + i // 32), "rb").read()
-                chunks.append(Chunk(zlib.decompress(external_file), REGION_DIMENSION * region_x + i % 32, REGION_DIMENSION * region_z + i // 32))
-            else:
-                raise Exception("Compression type %d unimplemented!" % (compression_type))
+            
+            x = REGION_DIMENSION * region_x + i % 32
+            z = REGION_DIMENSION * region_z + i // 32
+
+            match compression_type:
+                
+                case zlib.COMPRESSION_TYPE_ZLIB:
+                    chunk = Chunk(zlib.decompress(whole_raw_chunk[5:5 + chunk_size]), x, z)
+                    chunks.append(chunk)
+                
+                case zlib.EXTERNAL_FILE_COMPRESSION_TYPE:
+                    with open(source_folder + f"/c.{x}.{z}.mcc", "rb"):
+                        external_file = f.read()
+                    chunk = Chunk(zlib.decompress(external_file), x, z)
+                    chunks.append(chunk)
+                case _:
+                    raise Exception(f"Compression type {compression_type} unimplemented!")
         else:
             chunks.append(None)
 

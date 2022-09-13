@@ -1,8 +1,15 @@
 # Linear region file format for Minecraft
 
-Linear region format saves about 50% of disk space in OW and Nether and 95% in The End.
+Linear region format saves about 50% of disk space in the Overworld and Nether and 95% in The End.
 
-This repository hosts tools to convert between `.mca` and `.linear`.
+This repository hosts tools to convert to and from `.mca` and `.linear`.
+
+#### TODO:
+- Display progress bar and improve output
+- Add option to delete old region files
+- Add key interrupt handler to stop conversion
+- GUI conversion tool (using PyQt5) 
+- Unit tests
 
 ## Features:
 - Saves about 50% of space when compared to Anvil
@@ -60,34 +67,32 @@ All plugins that use NMS or Bukkit (ex. Chunky) will work.
 
 [LinearMultiPaper](https://github.com/xymb-endcrystalme/LinearMultiPaper) - MultiPaper with a few custom patches, including Linear region file format. No binaries available.
 
-## Python prerequisites:
+## Prerequisites:
 
-```apt install python3-pip
-pip3 install pyzstd xxhash
+Install the needed dependencies through pip
+```
+$ cd LinearTools/
+$ pip install -r requirements.txt 
 ```
 
 ## Usage:
 
-```./mca_to_linear.py r.0.0.mca```
+To see the full list of options, run the script with no arguments.
+```
+$ linear-tools-cli.py
+```
 
-Will create r.0.0.linear in the same directory
+Basic usuage requires the format denoted by either `mca` or `linear` and 
+a valid source directory or file 
+```
+$ linear-tools-cli.py <mca|linear> -s <source> [OPTIONS]
+```
 
-
-
-```./linear_to_mca.py r.0.0.linear```
-
-Will create r.0.0.mca in the same directory
-
-
-
-```./linear_to_mca_directory.py threads compression_level source_dir destination_dir```
-
-
-Suggested compression level is 6. Suggested threads is the amount of cores of the CPU.
-
-This command converts all ```.mca``` files from source_dir to ```.linear``` in the destination_dir.
-
-It checks file modification date, so you can convert 99% of your world at your leasure, and then finish the last 1% when the server is offline, thus achieving 5min downtime.
+### Notes:
+- The tool supports conversion of worlds and singular region files.
+- Default destination directory is set to the regions folder or the same directory 
+- Default compression level is 6.
+- Default threads is the amount of physical cores of the CPU.
 
 ## Results:
 

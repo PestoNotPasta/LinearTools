@@ -58,11 +58,14 @@ def open_region_linear(file_path):
 
     chunks = [None] * REGION_DIMENSION * REGION_DIMENSION
 
-    iterator = HEADER_SIZE
+    iter = HEADER_SIZE
     for i in range(REGION_DIMENSION * REGION_DIMENSION):
         if sizes[i] > 0:
-            chunks[i] = Chunk(decompressed_region[iterator: iterator + sizes[i]], x, z)
-        iterator += sizes[i]
+            
+            x = REGION_DIMENSION * region_x + i % 32
+            z = REGION_DIMENSION * region_z + i // 32
+            chunks[i] = Chunk(decompressed_region[iter: iter + sizes[i]], x, z)
+        iter += sizes[i]
 
     return Region(chunks, region_x, region_z, mtime, timestamps)
 
@@ -229,4 +232,3 @@ def write_region_anvil(destination_filename, region: Region, compression_level=z
     open(destination_filename + ".wip", "wb").write(b''.join(header_chunks) + b''.join(header_timestamps) + b''.join(sectors))
     os.utime(destination_filename + ".wip", (region.mtime, region.mtime))
     os.rename(destination_filename + ".wip", destination_filename)
-

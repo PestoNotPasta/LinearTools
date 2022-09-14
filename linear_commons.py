@@ -51,12 +51,15 @@ def _mca_to_linear(source: Path, destination: Path, compression_level: int, over
     dest_file = destination.joinpath(file_name.replace('mca', 'linear'))    
     source_size = path.getsize(source)
     
+    if overwrite:
+        dest_file.unlink(missing_ok=True)
+    
     if dest_file.exists():
         modif_time_dest = path.getmtime(dest_file)
         modif_time_source = path.getmtime(source)
         
         skip_conversion = modif_time_dest == modif_time_source or source_size == 0
-        if skip_conversion and not overwrite:
+        if skip_conversion:
             print(f'The region \'{dest_file.name}\' already exists. Skipping conversion...')
             return
         
@@ -82,12 +85,15 @@ def _linear_to_mca(source: Path, destination: Path, compression_level: int, over
     dest_file = destination.joinpath(file_name.replace('linear', 'mca'))    
     source_size = path.getsize(source)
     
+    if overwrite:
+        dest_file.unlink(missing_ok=True)
+    
     if dest_file.exists():
         modif_time_dest = path.getmtime(dest_file)
         modif_time_source = path.getmtime(source)
         
         skip_conversion = modif_time_dest == modif_time_source or source_size == 0
-        if skip_conversion and not overwrite:
+        if skip_conversion:
             print(f'The region \'{dest_file.name}\' already exists. Skipping conversion...')
             return
         

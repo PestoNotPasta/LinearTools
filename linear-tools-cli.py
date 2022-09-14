@@ -23,9 +23,8 @@ parser.add_argument('-s', '--source', required=True)
 parser.add_argument('-d', '--destination', default='')
 parser.add_argument('-t', '--threads', default=DEFAULT_THREADS)
 parser.add_argument('-c', '--compression', default=DEFAULT_COMPRESSION_LEVEL)
-parser.add_argument('-o', '--overwrite', action='store_true')
+parser.add_argument('-o', '--overwrite', action='store_true', default=False)
 parser.add_argument('--version', action='version', version=f'LinearTools v{VERSION}')
-
 
 def print_help():
     print(f"""

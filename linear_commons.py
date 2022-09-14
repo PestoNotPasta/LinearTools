@@ -54,7 +54,7 @@ def convert(region_type: str, source: Path, destination: Path, threads: int, com
     if is_region_file(source):
         args = [region_type, source, destination, compression_level, overwrite]
         print(f'\nConverting region file {source.name} to {region_type}...\n')
-        if _func(args, region_type):
+        if _func(args):
             print('Completed sucessfully\n')
         else: 
             print('An unknown error occured')

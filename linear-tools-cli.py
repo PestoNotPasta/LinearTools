@@ -60,8 +60,8 @@ if __name__ == '__main__':
     source = Path(args['source']).resolve()
     dest = Path(args['destination']).resolve()
     dest.mkdir(exist_ok=True)
-    threads = args['threads']
-    compression_level = args['compression']
+    threads = int(args['threads'])
+    compression_level = int(args['compression'])
     overwrite = args['overwrite']
 
     # Check if source path exists

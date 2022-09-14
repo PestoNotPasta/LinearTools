@@ -4,8 +4,6 @@ import argparse
 import io
 from argparse import SUPPRESS
 from contextlib import redirect_stderr
-from itertools import repeat
-from multiprocessing import Pool
 from pathlib import Path
 
 from linear_commons import *
@@ -25,6 +23,7 @@ parser.add_argument('-s', '--source', required=True)
 parser.add_argument('-d', '--destination', default='')
 parser.add_argument('-t', '--threads', default=DEFAULT_THREADS)
 parser.add_argument('-c', '--compression', default=DEFAULT_COMPRESSION_LEVEL)
+parser.add_argument('-o', '--overwrite', action='store_true')
 parser.add_argument('--version', action='version', version=f'LinearTools v{VERSION}')
 
 
@@ -40,29 +39,10 @@ def print_help():
         -d, --destination          The destination directory.
         -t, --threads              Number of threads to allocate.
         -c, --compression          Compression level to apply.
+        -o, --overwrite            Overwrite existing, converted reigon files
         --version                  Show the current version.
     """)
     exit(1)
-
-def _handle_world(format: str, source: Path, destination: Path, threads: int, compression_level: int) -> None:
-    format_from = 'linear' if format == 'mca' else 'mca'
-
-    # Handle invalid destination directory
-    if destination == Path('') or not (destination.is_dir() and destination.exists()):
-        destination = source.joinpath('region')
-    
-    # Convert region files
-    region_files = [f for f in source.joinpath('region').iterdir() if f.name.endswith(format_from)]
-    with Pool(threads) as pool:
-        pool.starmap(convert_region, zip(repeat(format), region_files, repeat(destination), repeat(threads), repeat(compression_level)))
-
-def _handle_region(format: str, source: Path, destination: str, threads: int, compression_level: int) -> None:
-
-    # Handle invalid destination directory
-    if destination == Path('') or not (destination.is_file() and destination.exists()):
-        destination = source.parent()
-    
-    convert_region(format, source, destination, threads, compression_level)
 
 if __name__ == '__main__':
     args = {}
@@ -78,20 +58,16 @@ if __name__ == '__main__':
 
     # Get arguments
     region_format = args['region-format']
-    source = Path(args['source'])
-    dest = Path(args['destination'])
+    source = Path(args['source']).resolve()
+    dest = Path(args['destination']).resolve()
     dest.mkdir(exist_ok=True)
     threads = args['threads']
-    compression_level = args['compression-level']
+    compression_level = args['compression']
+    overwrite = args['overwrite']
 
     # Check if source path exists
     if not (source.exists()):
         print('The path could not be resolved. Please check the path and try again')
         exit(1)
     
-    if is_region_file(source):
-        _handle_region(region_format, source, dest, threads, compression_level)
-    elif is_world_dir(source):
-        _handle_world(region_format, source, dest, threads, compression_level)
-    else:
-        print('The path provided is neither a world directory or region file')
+    convert(region_format, source, dest, threads, compression_level, overwrite)

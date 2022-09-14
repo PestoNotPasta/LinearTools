@@ -85,7 +85,7 @@ def quickly_verify_linear(file_path):
         
     return True
 
-def write_region_linear(destination_filename: Path, region: Region, compression_level=1):
+def write_region_linear(dest_file_path: Path, region: Region, compression_level=1):
     inside_header = []
     newest_timestamp = 0
     chunk_count = 0
@@ -117,12 +117,12 @@ def write_region_linear(destination_filename: Path, region: Region, compression_
     footer = struct.pack(">Q", LINEAR_SIGNATURE)
 
     final_region_file = preheader + complete_region_hash + complete_region + footer
-
-    with open(destination_filename + ".wip", "wb") as f:
+    str_path = str(dest_file_path)
+    with open(str_path + ".wip", "wb") as f:
         f.write(final_region_file)
 
-    os.utime(destination_filename + ".wip", (region.mtime, region.mtime))
-    os.rename(destination_filename + ".wip", destination_filename)
+    os.utime(str_path + ".wip", (region.mtime, region.mtime))
+    os.rename(str_path + ".wip", dest_file_path)
 
 def open_region_anvil(file_path: Path):
     SECTOR = 4096
@@ -139,7 +139,7 @@ def open_region_anvil(file_path: Path):
     with open(file_path, 'rb') as f:
         anvil_file = f.read()
 
-    source_folder = file_path.parent()
+    source_folder = file_path.parent
 
     for i in range(REGION_DIMENSION * REGION_DIMENSION):
         a, b, c, sector_count = struct.unpack_from(">BBBB", anvil_file, i * 4)
@@ -157,20 +157,19 @@ def open_region_anvil(file_path: Path):
             
             x = REGION_DIMENSION * region_x + i % 32
             z = REGION_DIMENSION * region_z + i // 32
-
-            match compression_type:
                 
-                case zlib.COMPRESSION_TYPE_ZLIB:
-                    chunk = Chunk(zlib.decompress(whole_raw_chunk[5:5 + chunk_size]), x, z)
-                    chunks.append(chunk)
-                
-                case zlib.EXTERNAL_FILE_COMPRESSION_TYPE:
-                    with open(source_folder + f"/c.{x}.{z}.mcc", "rb"):
-                        external_file = f.read()
-                    chunk = Chunk(zlib.decompress(external_file), x, z)
-                    chunks.append(chunk)
-                case _:
-                    raise Exception(f"Compression type {compression_type} unimplemented!")
+            if compression_type == COMPRESSION_TYPE_ZLIB:
+                chunk = Chunk(zlib.decompress(whole_raw_chunk[5:5 + chunk_size]), x, z)
+                chunks.append(chunk)
+            
+            elif compression_type == EXTERNAL_FILE_COMPRESSION_TYPE:
+                with open(source_folder + f"/c.{x}.{z}.mcc", "rb"):
+                    external_file = f.read()
+                chunk = Chunk(zlib.decompress(external_file), x, z)
+                chunks.append(chunk)
+            
+            else:
+                raise Exception(f"Compression type {compression_type} unimplemented!")
         else:
             chunks.append(None)
 
@@ -193,12 +192,12 @@ def write_region_anvil(destination_filename, region: Region, compression_level=z
             compressed = zlib.compress(region.chunks[i].raw_chunk, compression_level)
             final_chunk_data = struct.pack(">I", len(compressed) + 1) + COMPRESSION_TYPE + compressed
 
-            padding = 4096 - (len(final_chunk_data) % 4096)
-            if padding == 4096:
+            padding = SECTOR - (len(final_chunk_data) % SECTOR)
+            if padding == SECTOR:
                 padding = 0
             final_chunk_data += b'\x00' * padding
 
-            sector_count = len(final_chunk_data) // 4096
+            sector_count = len(final_chunk_data) // SECTOR
             if sector_count > 255:
                 x, z = i % 32, i // 32
                 print("Chunk in external file", region.region_x * 32 + x, region.region_z * 32 + z)
@@ -209,8 +208,8 @@ def write_region_anvil(destination_filename, region: Region, compression_level=z
 
                 final_chunk_data = struct.pack(">IB", 1, EXTERNAL_FILE_COMPRESSION_TYPE)
                 sector_count = 1
-                padding = 4096 - (len(final_chunk_data) % 4096)
-                if padding == 4096:
+                padding = SECTOR - (len(final_chunk_data) % SECTOR)
+                if padding == SECTOR:
                     padding = 0
                 final_chunk_data += b'\x00' * padding
             sectors.append(final_chunk_data)

@@ -11,7 +11,7 @@ DEFAULT_COMPRESSION_LEVEL = 6
 
 def is_world_dir(source: Path) -> bool:
     'Returns True if the path given is a Minecraft world.'
-    return source.isdir() and source.joinpath('level.dat').exists()
+    return source.is_dir() and source.joinpath('level.dat').exists()
 
 def is_region_file(source: Path) -> bool:
     'Returns True if the path given is a region file.'
@@ -33,12 +33,12 @@ def convert(region_format: str, source: Path, destination: Path, threads: int, c
         region_files = [f for f in source.joinpath('region').iterdir() if f.name.endswith(format_from)]
         with Pool(threads) as pool:
             pool.starmap(func, zip(
-                repeat(region_format), 
-                region_files, 
-                repeat(destination), 
-                repeat(threads), 
-                repeat(compression_level), 
-                repeat(overwrite)
+                    repeat(region_format), 
+                    region_files, 
+                    repeat(destination), 
+                    repeat(threads), 
+                    repeat(compression_level), 
+                    repeat(overwrite)
                 )
             )
 
@@ -62,7 +62,7 @@ def _mca_to_linear(source: Path, destination: Path, compression_level: int, over
         if skip_conversion:
             print(f'The region \'{dest_file.name}\' already exists. Skipping conversion...')
             return
-        
+
     try:
         region = open_region_anvil(source)
         write_region_linear(dest_file, region, compression_level)
@@ -84,7 +84,7 @@ def _linear_to_mca(source: Path, destination: Path, compression_level: int, over
     file_name = source.name
     dest_file = destination.joinpath(file_name.replace('linear', 'mca'))    
     source_size = path.getsize(source)
-    
+
     if overwrite:
         dest_file.unlink(missing_ok=True)
     

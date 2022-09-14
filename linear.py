@@ -85,7 +85,7 @@ def quickly_verify_linear(file_path):
         
     return True
 
-def write_region_linear(dest_file_path: Path, region: Region, compression_level=1):
+def write_region_linear(destination: Path, region: Region, compression_level: int):
     inside_header = []
     newest_timestamp = 0
     chunk_count = 0
@@ -117,12 +117,12 @@ def write_region_linear(dest_file_path: Path, region: Region, compression_level=
     footer = struct.pack(">Q", LINEAR_SIGNATURE)
 
     final_region_file = preheader + complete_region_hash + complete_region + footer
-    str_path = str(dest_file_path)
+    str_path = str(destination)
     with open(str_path + ".wip", "wb") as f:
         f.write(final_region_file)
 
     os.utime(str_path + ".wip", (region.mtime, region.mtime))
-    os.rename(str_path + ".wip", dest_file_path)
+    os.rename(str_path + ".wip", destination)
 
 def open_region_anvil(file_path: Path):
     SECTOR = 4096
@@ -176,10 +176,9 @@ def open_region_anvil(file_path: Path):
     return Region(chunks, region_x, region_z, mtime, timestamps)
 
 
-def write_region_anvil(destination_filename, region: Region, compression_level=zlib.Z_DEFAULT_COMPRESSION):
+def write_region_anvil(destination: Path, region: Region, compression_level: int):
     SECTOR = 4096
 
-    destination_folder = destination_filename.rpartition("/")[0]
     header_chunks = []
     header_timestamps = []
     sectors = []
@@ -200,9 +199,12 @@ def write_region_anvil(destination_filename, region: Region, compression_level=z
             sector_count = len(final_chunk_data) // SECTOR
             if sector_count > 255:
                 x, z = i % 32, i // 32
-                print("Chunk in external file", region.region_x * 32 + x, region.region_z * 32 + z)
-                chunk_file_path = destination_folder + "/c.%d.%d.mcc" % (region.region_x * 32 + x, region.region_z * 32 + z)
-                open(chunk_file_path + ".wip", "wb").write(compressed)
+                region_coords = region.region_x * 32 + x, region.region_z * 32 + z
+                print("Chunk in external file", region_coords[0], region_coords[1])
+                chunk_file_path = destination.joinpath(f"/c.{region_coords[0]}.{region_coords[1]}.mcc")
+                with open(chunk_file_path + ".wip", "wb") as f:
+                    f.write(compressed)
+                
                 os.utime(chunk_file_path + ".wip", (region.mtime, region.mtime))
                 os.rename(chunk_file_path + ".wip", chunk_file_path)
 
@@ -227,6 +229,6 @@ def write_region_anvil(destination_filename, region: Region, compression_level=z
     for i in range(REGION_DIMENSION * REGION_DIMENSION):
         header_timestamps.append(struct.pack(">I", region.timestamps[i]))
 
-    open(destination_filename + ".wip", "wb").write(b''.join(header_chunks) + b''.join(header_timestamps) + b''.join(sectors))
-    os.utime(destination_filename + ".wip", (region.mtime, region.mtime))
-    os.rename(destination_filename + ".wip", destination_filename)
+    open(destination + ".wip", "wb").write(b''.join(header_chunks) + b''.join(header_timestamps) + b''.join(sectors))
+    os.utime(destination + ".wip", (region.mtime, region.mtime))
+    os.rename(destination + ".wip", destination)

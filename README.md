@@ -85,11 +85,13 @@ $ linear-tools-cli.py
 Basic usuage requires the format denoted by either `mca` or `linear` and 
 a valid source directory or file 
 ```
-$ linear-tools-cli.py <mca|linear> -s <source> [OPTIONS]
+$ linear-tools-cli.py -s <source> [OPTIONS]
 ```
 
 ### Notes:
 - The tool supports conversion of worlds and singular region files.
+- Arguments requiring a path support both absolute and relative paths
+- Default region format format is linear
 - Default destination directory is set to the regions folder or the same directory 
 - Default compression level is 6.
 - Default threads is the amount of physical cores of the CPU.

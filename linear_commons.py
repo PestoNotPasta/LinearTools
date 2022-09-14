@@ -1,14 +1,14 @@
+from multiprocessing import Pool
+import signal
+import tqdm
 from time import sleep
 import traceback
 from itertools import repeat
 from os import path
 from pathlib import Path
 from textwrap import dedent
-from turtle import position
 
 import psutil
-from p_tqdm import p_map
-
 from linear import *
 
 DEFAULT_THREADS = psutil.cpu_count(logical=False)
@@ -21,12 +21,17 @@ def is_region_file(source: Path) -> bool:
     'Returns True if the path given is a region file.'
     return source.is_file() and source.name.endswith(('mca', 'linear'))    
 
-def convert(region_format: str, source: Path, destination: Path, threads: int, compression_level: int, overwrite: bool):
+def _init_pool():
+    return signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+def _func(args):
+    if args[0] == 'linear':
+        return _mca_to_linear(*args[1:])  
+    return _linear_to_mca(*args[1:])
+
+def convert(region_type: str, source: Path, destination: Path, threads: int, compression_level: int, overwrite: bool):
     use_multiprocessing = is_world_dir(source)
     
-    def func(args):
-        return _mca_to_linear(*args) if region_format == 'linear' else _linear_to_mca(*args)
-
     # Handles an invalid destination directory
     if destination == Path('') or not (destination.is_dir() and destination.exists()):        
         
@@ -47,58 +52,56 @@ def convert(region_format: str, source: Path, destination: Path, threads: int, c
 
     # Convert                         
     if is_region_file(source):
-        args = [source, destination, compression_level, overwrite]
-        print(f'\nConverting region file {source.name} to {region_format}...\n')
-        if func(args):
+        args = [region_type, source, destination, compression_level, overwrite]
+        print(f'\nConverting region file {source.name} to {region_type}...\n')
+        if _func(args, region_type):
             print('Completed sucessfully\n')
         else: 
             print('An unknown error occured')
 
     elif use_multiprocessing:
-        format_from = 'linear' if region_format == 'mca' else 'mca'
+
+        format_from = 'linear' if region_type == 'mca' else 'mca'
         region_files = [f for f in source.joinpath('region').iterdir() if f.name.endswith(format_from)]
         region_files.sort()
 
         # Create list of args for multiprocessing 
-        args = list(zip(region_files, repeat(destination), repeat(compression_level), repeat(overwrite)))
+        r = repeat
+        args = list(zip(r(region_type), region_files, r(destination), r(compression_level), r(overwrite)))
 
         # Process jobs and display progress bar
-        print(f'\nConverting world \'{source.name}\' [{format_from} -> {region_format}]\n')
-        p_map(func, args, 
-            num_cpus=threads, 
-            ncols=80, 
-            desc='  > Converting',
-            bar_format='{l_bar}{bar:35}| {n_fmt}/{total_fmt}, [{elapsed}]' 
-        )
-        sleep(1)
-        print('\nDone...')
-        sleep(0.5)
-        # Print additional statistics for linear
-        if region_format == 'linear':
-            source_size = sum(f.stat().st_size for f in region_files)
-            dest_size = sum(f.stat().st_size for f in os.scandir(destination))
-            percentage = (100 * dest_size / source_size) 
-            output = dedent(f'''
-                ----------------------------------
-                [#] Statistics:
-                ----------------------------------
-                Total region size (anvil): {_format_bytes(source_size)}
-                Total region size (linear): {_format_bytes(dest_size)}
-                Compression achieved: {percentage: .2f}%
-                ''')
+        print(f'\nConverting world \'{source.name}\' [{format_from} -> {region_type}]\n')
+        with Pool(threads, initializer=_init_pool) as p:
+            try:
+                with tqdm.trange(len(args), ncols=80, desc='  > Converting', bar_format='{l_bar}{bar:35}| {n_fmt}/{total_fmt}, [{elapsed}]') as pbar:
+                    pbar.reset()
+                    for _ in p.imap_unordered(_func, args):
+                        pbar.update(1)                        
+            except KeyboardInterrupt:
+                print('\nCtrl-C Entered. Terminating...\n')
+                p.close()
+                p.terminate()
+                exit(1)
 
-            print(output)
-        # with Pool(threads) as pool:
-        #     with tqdm(total=len(args)) as pbar:
-        #         result = pool.imap(func, args)
-        #         for _ in result:
-        #             if any(map(lambda x: isinstance(x, KeyboardInterrupt), result)):
-        #                 print('Ctrl-C was entered.')
-        #                 pool.close()
-        #                 pool.join()
-        #             pbar.update()
-            
-        # result = list(tqdm(pool.imap(func, list(args)), total=len(region_files))) 
+            sleep(.5)
+            print('\nDone...')
+            sleep(.5)
+
+            # Print additional statistics for linear
+            if region_type == 'linear':
+                source_size = sum(f.stat().st_size for f in region_files)
+                dest_size = sum(f.stat().st_size for f in os.scandir(destination))
+                percentage = (100 * dest_size / source_size) 
+                output = dedent(f'''
+                    ----------------------------------
+                    [#] Statistics:
+                    ----------------------------------
+                    Total region size (anvil): {_format_bytes(source_size)}
+                    Total region size (linear): {_format_bytes(dest_size)}
+                    Compression achieved: {percentage: .2f}%
+                    ''')
+
+                print(output)
 
 def _mca_to_linear(source: Path, destination: Path, compression_level: int, overwrite: bool) -> bool: 
     '''

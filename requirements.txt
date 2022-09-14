@@ -1,4 +1,4 @@
 pyzstd
 xxhash
 psutil
-p_tqdm
+tqdm
